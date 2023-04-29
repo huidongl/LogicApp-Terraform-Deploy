@@ -1,0 +1,75 @@
+trigger: none
+
+
+pr: none
+
+
+variables:
+- name: devEnvironment
+  value: 'dev'
+
+stages:
+- stage: Build
+
+  displayName: 'Build Artifact'
+
+  jobs:
+  - job: logic_app_build
+    displayName: 'Build and publish logic app'
+    steps:
+    - task: CopyFiles@2
+      displayName: 'Create project folder'
+      inputs:
+        SourceFolder: '$(System.DefaultWorkingDirectory)/LogicAppWorkflow'
+        Contents: |
+          host.json
+          connections.json
+          testflow/**
+        TargetFolder: '$(System.DefaultWorkingDirectory)/LogicAppWorkflow/project_output'
+
+    - task: ArchiveFiles@2
+      displayName: 'Create project zip'
+      inputs:
+        rootFolderOrFile: '$(System.DefaultWorkingDirectory)/LogicAppWorkflow/project_output'
+        includeRootFolder: false
+        archiveType: 'zip'
+        archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+        replaceExistingArchive: true
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish project zip artifact'
+      inputs:
+        targetPath: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+        artifact: 'logicAppCIArtifact'
+        publishLocation: 'pipeline'
+
+
+- stage: Deployment
+
+  displayName: 'Deploy logic app'
+
+  jobs:
+  - job: logic_app_deploy
+    displayName: 'Deploy logic app'
+    steps:
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        artifact: 'logicAppCIArtifact'
+        path: '$(Build.ArtifactStagingDirectory)'
+        
+    - script: dir
+      workingDirectory: $(Build.ArtifactStagingDirectory)
+      displayName: List contents of a folder
+      
+    - task: AzureFunctionApp@1
+      displayName: 'Deploy logic app workflows'
+      inputs:
+        azureSubscription: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+        ConnectedServiceName: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+        resourceGroupName: 'la-tfdeploy-rg'
+        location: 'eastus'
+        appType: 'functionApp,workflowapp'
+        appName: 'logicapp-test-huidong'
+        package: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+
+        deploymentMethod: 'zipDeploy'

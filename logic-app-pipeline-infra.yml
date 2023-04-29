@@ -1,0 +1,110 @@
+trigger:
+- master
+
+pool:
+  vmimage: 'windows-2019'
+
+variables:
+#the storage account information for the terraform state data
+  terraformstoragerg: 'tfdeploy'
+  terraformstorageaccount: 'huidongtf'
+  storagekey: 'PipelineWillGetThisValueRuntime'
+  terraformstorageaccountcontainer: 'terraform'
+
+stages:
+- stage: Build
+  displayName: 'Build Artifact'
+  jobs:
+  - job: logic_app_build
+    displayName: 'Build and publish terraformcode'
+    steps:
+    - task: CopyFiles@2
+      displayName: 'Copy Terraform files to artifacts'
+      inputs:
+        SourceFolder: Terraform
+        TargetFolder: '$(build.artifactstagingdirectory)/Terraform'
+
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Artifact'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+        ArtifactName: 'drop'
+
+- stage: Deployment
+  displayName: 'Deploy logic app'
+  jobs:
+  - job:  terraform_deploy
+    displayName: 'TF deploy' 
+    steps:
+    ######This step is not needed if the storage account for terraform is already created######
+    # - task: AzureCLI@1
+    #   displayName: 'Azure CLI to create storage account for terraform'
+    #   inputs:
+    #     azureSubscription: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+    #     scriptLocation: inlineScript
+    #     inlineScript: |
+    #      #this will create Azure resource group
+    #      call az group create --location westus --name $(terraformstoragerg)      
+    #      call az storage account create --name $(terraformstorageaccount) --resource-group $(terraformstoragerg) --location eastus --sku Standard_LRS       
+    #      call az storage container create --name terraform --account-name $(terraformstorageaccount)
+    #      call az storage account keys list -g $(terraformstoragerg) -n $(terraformstorageaccount)
+
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        artifact: 'drop'
+        path: '$(Build.ArtifactStagingDirectory)'
+        
+    - task: AzurePowerShell@3
+      displayName: 'Azure PowerShell script to get the storage key'
+      inputs:
+        azureSubscription: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+        ScriptType: InlineScript
+        Inline: |
+         # using this script to fetch storage key required in terraform file
+        
+         $key=(Get-AzureRmStorageAccountKey -ResourceGroupName $(terraformstoragerg) -AccountName $(terraformstorageaccount)).Value[0]
+        
+         Write-Host  "##vso[task.setvariable variable=storagekey]$key"
+        azurePowerShellVersion: LatestVersion
+        
+    - task: qetza.replacetokens.replacetokens-task.replacetokens@5
+      displayName: 'Replace tokens in terraform file'
+      inputs:
+        targetFiles: '$(Build.ArtifactStagingDirectory)/Terraform/*.tf'
+        tokenPattern: custom
+        tokenPrefix: '__'
+        tokenSuffix: '__'
+        
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
+      displayName: 'Install Terraform latest'
+
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV2@2
+      displayName: 'Terraform : init'
+      inputs:
+        workingDirectory: '$(Build.ArtifactStagingDirectory)/Terraform'
+        backendServiceArm: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+        backendAzureRmResourceGroupName: '$(terraformstoragerg)'
+        backendAzureRmStorageAccountName: '$(terraformstorageaccount)'
+        backendAzureRmContainerName: '$(terraformstorageaccountcontainer)'
+        backendAzureRmKey: terraform.tfstate
+        
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV2@2
+      displayName: 'Terraform : plan'
+      inputs:
+        command: plan
+        workingDirectory: '$(Build.ArtifactStagingDirectory)/Terraform'
+        environmentServiceNameAzureRM: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV2@2
+      displayName: 'Terraform :  apply -auto-approve'
+      inputs:
+        command: apply
+        workingDirectory: '$(Build.ArtifactStagingDirectory)/Terraform'
+        commandOptions: '-auto-approve'
+        environmentServiceNameAzureRM: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+        backendServiceArm: 
+        backendAzureRmResourceGroupName: '$(terraformstoragerg)'
+        backendAzureRmStorageAccountName: '$(terraformstorageaccount)'
+        backendAzureRmContainerName: '$(terraformstorageaccountcontainer)'
+        backendAzureRmKey: '$(storagekey)'
+
