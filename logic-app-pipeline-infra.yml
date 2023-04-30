@@ -5,7 +5,7 @@ pool:
   vmimage: 'windows-2019'
 
 variables:
-#the storage account information for the terraform state data
+#the storage account information for the terraform state data, replace with your own resource
   terraformstoragerg: 'tfdeploy'
   terraformstorageaccount: 'huidongtf'
   storagekey: 'PipelineWillGetThisValueRuntime'
@@ -57,7 +57,7 @@ stages:
     - task: AzurePowerShell@3
       displayName: 'Azure PowerShell script to get the storage key'
       inputs:
-        azureSubscription: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+        azureSubscription: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)' #replace this with your own service connection name
         ScriptType: InlineScript
         Inline: |
          # using this script to fetch storage key required in terraform file
@@ -82,7 +82,7 @@ stages:
       displayName: 'Terraform : init'
       inputs:
         workingDirectory: '$(Build.ArtifactStagingDirectory)/Terraform'
-        backendServiceArm: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+        backendServiceArm: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)' #replace this with your own service connection name
         backendAzureRmResourceGroupName: '$(terraformstoragerg)'
         backendAzureRmStorageAccountName: '$(terraformstorageaccount)'
         backendAzureRmContainerName: '$(terraformstorageaccountcontainer)'
@@ -93,7 +93,7 @@ stages:
       inputs:
         command: plan
         workingDirectory: '$(Build.ArtifactStagingDirectory)/Terraform'
-        environmentServiceNameAzureRM: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+        environmentServiceNameAzureRM: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)' #replace this with your own service connection name
 
     - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV2@2
       displayName: 'Terraform :  apply -auto-approve'
@@ -101,7 +101,7 @@ stages:
         command: apply
         workingDirectory: '$(Build.ArtifactStagingDirectory)/Terraform'
         commandOptions: '-auto-approve'
-        environmentServiceNameAzureRM: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)'
+        environmentServiceNameAzureRM: 'Huidong Liu (cc0ecbfb-0faf-492d-8996-be21d0865ca6)' #replace this with your own service connection name
         backendServiceArm: 
         backendAzureRmResourceGroupName: '$(terraformstoragerg)'
         backendAzureRmStorageAccountName: '$(terraformstorageaccount)'
